@@ -1,19 +1,19 @@
-const express = require('express');
-const cors = require('cors');
+const express = require("express");
+const cors = require("cors");
+
+const routes = require("./routes");
+
+const { notFound } = require("./common/middleware/notFound");
+const { errorHandler } = require("./common/middleware/errorHandler");
 
 const app = express();
-
-// middleware
 app.use(cors());
 app.use(express.json());
 
-// health check
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-  });
-});
+app.use("/api", routes);     // ✅ 여기서 /api 붙임
+app.use("/health", require("./routes/health.route")); // ✅ /health는 별도로
+
+app.use(notFound);
+app.use(errorHandler);
 
 module.exports = app;
