@@ -1,6 +1,9 @@
 // src/modules/adoptions/adoptions.routes.js
 const express = require("express");
 
+const { requireAuth } = require("../../common/middleware/requireAuth");
+const { requireRole } = require("../../common/middleware/requireRole");
+
 const { toErrorResponse } = require("../common/errorResponse");
 const { toPageResponse } = require("../common/pageResponse");
 
@@ -217,7 +220,7 @@ adoptionsRouter.get("/animals/:id/adoptions", async (req, res) => {
 });
 
 // PATCH /api/adoptions/:id/approve (ADMIN 예정)
-adoptionsRouter.patch("/adoptions/:id/approve", async (req, res) => {
+adoptionsRouter.patch("/adoptions/:id/approve", requireAuth, requireRole("ADMIN"), async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     return res.status(ADOPTION_ERRORS.INVALID_QUERY.status).json(
