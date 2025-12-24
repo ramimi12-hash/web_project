@@ -1,7 +1,13 @@
 // src/modules/animals/animals.routes.js
+
 const express = require("express");
-const { toErrorResponse } = require("../common/errorResponse");
-const { toPageResponse } = require("../common/pageResponse");
+
+
+const { requireAuth } = require("../../common/middleware/requireAuth");
+
+const { toErrorResponse } = require("../../common/middleware/errorHandler");
+const { toPageResponse } = require("../../common/pageResponse");
+
 const repo = require("./animals.repo");
 const service = require("./animals.service");
 const { ANIMAL_ERRORS } = require("./animals.errors");
@@ -74,7 +80,7 @@ animalsRouter.get("/:id", async (req, res) => {
 });
 
 // List (filter/search/sort/page)
-animalsRouter.get("/", async (req, res) => {
+animalsRouter.get("/", requireAuth, async (req, res) => {
   const parsed = parseListQuery(req.query);
   if (parsed.error) {
     return res.status(ANIMAL_ERRORS.INVALID_QUERY.status).json(

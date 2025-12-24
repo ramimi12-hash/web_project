@@ -2,6 +2,7 @@
 
 const express = require("express");
 const router = express.Router();
+const authRouter = require("../auth/auth.route");
 
 // /health
 router.get("/health", (req, res) => {
@@ -27,5 +28,5 @@ router.use("/api/adoptions", adoptionsRouter);
 router.use("/api/donations", donationsRouter);
 router.use("/api/volunteers", volunteersRouter);
 router.use("/api/stats", statsRouter);
-
+router.use("/auth", authRouter);
 module.exports = router;
