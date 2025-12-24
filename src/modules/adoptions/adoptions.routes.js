@@ -1,10 +1,18 @@
+// src/modules/adoptions/adoptions.routes.js
 const express = require("express");
+
 const { toErrorResponse } = require("../common/errorResponse");
 const { toPageResponse } = require("../common/pageResponse");
-const { ADOPTION_ERRORS } = require("./adoptions.errors");
+
 const service = require("./adoptions.service");
 const repo = require("./adoptions.repo");
-const { validateCreate, validateConfirm, validateCancel, parseListQuery } = require("./adoptions.validators");
+const { ADOPTION_ERRORS } = require("./adoptions.errors");
+const {
+  validateCreate,
+  validateConfirm,
+  validateCancel,
+  parseListQuery,
+} = require("./adoptions.validators");
 
 const adoptionsRouter = express.Router();
 
