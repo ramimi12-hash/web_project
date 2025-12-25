@@ -11,11 +11,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ 딱 1줄로 끝 (health + api 모두 포함)
+// 라우터
 app.use(routes);
 
-// ✅ 반드시 맨 아래
+// 404
 app.use(notFound);
+
+// 에러 핸들러 (반드시 맨 아래)
 app.use(errorHandler);
 
 module.exports = app;
