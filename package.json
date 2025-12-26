@@ -1,0 +1,48 @@
+{
+  "name": "shelter-management-api",
+  "version": "1.0.0",
+  "description": "Shelter Management API",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "cross-env NODE_ENV=test jest --runInBand",
+    "test:watch": "cross-env NODE_ENV=test jest --watch --runInBand"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ramimi12-hash/web_project.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ramimi12-hash/web_project/issues"
+  },
+  "homepage": "https://github.com/ramimi12-hash/web_project#readme",
+  "dependencies": {
+    "@prisma/client": "6.10.0",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "google-auth-library": "^10.5.0",
+    "jsonwebtoken": "^9.0.3",
+    "redis": "^5.10.0",
+    "swagger-ui-express": "^5.0.1",
+    "yaml": "^2.8.2",
+    "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0",
+    "jest": "^30.2.0",
+    "nodemon": "^3.1.11",
+    "prisma": "6.10.0",
+    "supertest": "^7.1.4"
+  }
+}

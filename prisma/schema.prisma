@@ -1,0 +1,124 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum AnimalStatus {
+  SHELTERED
+  TEMP_FOSTER
+  ADOPTED
+  DECEASED
+}
+
+enum AdoptionStatus {
+  REQUESTED
+  APPROVED
+  CONFIRMED
+  CANCELED
+}
+
+enum VolunteerStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+}
+
+enum MedicalType {
+  NEUTER
+  SURGERY
+  TREATMENT
+  VACCINE
+}
+
+model Animal {
+  id          Int          @id @default(autoincrement())
+  name        String?      @db.VarChar(50)
+  species     String       @db.VarChar(30)   // dog/cat/etc
+  breed       String?      @db.VarChar(50)
+  sex         String       @db.VarChar(10)   // M/F/UNKNOWN
+  ageYears    Int?
+  intakeDate  DateTime
+  neutered    Boolean      @default(false)
+  status      AnimalStatus @default(SHELTERED)
+  note        String?      @db.VarChar(255)
+
+  medicalRecords MedicalRecord[]
+  adoptions      Adoption[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([species, neutered, status, intakeDate])
+}
+
+model MedicalRecord {
+  id          Int        @id @default(autoincrement())
+  animalId    Int
+  type        MedicalType
+  description String?    @db.VarChar(255)
+  performedAt DateTime
+  cost        Int?       // 원 단위
+
+  animal      Animal     @relation(fields: [animalId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([animalId, performedAt])
+}
+
+model Adoption {
+  id             Int            @id @default(autoincrement())
+  animalId       Int
+  applicantName  String         @db.VarChar(50)
+  applicantPhone String?        @db.VarChar(20)
+  status         AdoptionStatus @default(REQUESTED)
+
+  requestedAt    DateTime       @default(now())
+  approvedAt     DateTime?
+  adoptedAt      DateTime?
+  canceledAt     DateTime?
+  cancelReason   String?        @db.VarChar(255)
+
+  animal         Animal         @relation(fields: [animalId], references: [id], onDelete: Restrict)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([animalId, status, adoptedAt])
+}
+
+model Donation {
+  id            Int      @id @default(autoincrement())
+  donorName     String   @db.VarChar(50)
+  donorContact  String?  @db.VarChar(50)
+  amount        Int
+  donatedAt     DateTime
+  receiptIssued Boolean  @default(false)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([donatedAt])
+  @@index([donorName])
+}
+
+model Volunteer {
+  id        Int             @id @default(autoincrement())
+  name      String          @db.VarChar(50)
+  phone     String?         @db.VarChar(20)
+  email     String?         @db.VarChar(100)
+  status    VolunteerStatus @default(PENDING)
+  joinedAt  DateTime        @default(now())
+  note      String?         @db.VarChar(255)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([name])
+}

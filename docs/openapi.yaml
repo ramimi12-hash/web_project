@@ -1,0 +1,1471 @@
+openapi: 3.0.3
+info:
+  title: Shelter Center API
+  version: 1.0.0
+  description: "유기동물 보호소 운영 API (Animals/Adoptions/Donations/Medical/Volunteers/Stats)"
+
+servers:
+  - url: http://localhost:8080
+    description: local
+
+tags:
+  - name: Health
+  - name: Animals
+  - name: Adoptions
+  - name: Donations
+  - name: Medical
+  - name: Volunteers
+  - name: Stats
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [timestamp, path, status, code, message]
+      properties:
+        timestamp: { type: string, format: date-time }
+        path: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        message: { type: string }
+        details: { type: object, nullable: true }
+
+    PageResponse:
+      type: object
+      required: [content, page, size, totalElements, totalPages, sort]
+      properties:
+        content:
+          type: array
+          items: {}
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer }
+        totalPages: { type: integer }
+        sort: { type: string }
+
+    Animal:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string, nullable: true }
+        species: { type: string, example: dog }
+        breed: { type: string, nullable: true }
+        sex:
+          type: string
+          enum: [M, F, UNKNOWN]
+        ageYears: { type: integer, nullable: true }
+        intakeDate: { type: string, format: date-time }
+        neutered: { type: boolean }
+        status:
+          type: string
+          enum: [SHELTERED, TEMP_FOSTER, ADOPTED, DECEASED]
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Adoption:
+      type: object
+      properties:
+        id: { type: integer }
+        animalId: { type: integer }
+        applicantName: { type: string }
+        applicantPhone: { type: string, nullable: true }
+        status:
+          type: string
+          enum: [REQUESTED, APPROVED, CONFIRMED, CANCELED]
+        requestedAt: { type: string, format: date-time }
+        approvedAt: { type: string, format: date-time, nullable: true }
+        adoptedAt: { type: string, format: date-time, nullable: true }
+        canceledAt: { type: string, format: date-time, nullable: true }
+        cancelReason: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Donation:
+      type: object
+      properties:
+        id: { type: integer }
+        donorName: { type: string }
+        donorContact: { type: string, nullable: true }
+        amount: { type: integer }
+        donatedAt: { type: string, format: date-time }
+        receiptIssued: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    MedicalRecord:
+      type: object
+      properties:
+        id: { type: integer }
+        animalId: { type: integer }
+        type: { type: string, example: SURGERY }
+        description: { type: string, nullable: true }
+        performedAt: { type: string, format: date-time }
+        cost: { type: number, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Volunteer:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        phone: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        note: { type: string, nullable: true }
+        status:
+          type: string
+          enum: [PENDING, APPROVED, SUSPENDED]
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+
+  ########################################################
+  # Animals (mounted: /api/animals)
+  ########################################################
+
+  /api/animals/__ping:
+    get:
+      tags: [Animals]
+      summary: Ping (animals module)
+      responses:
+        "200":
+          description: OK
+
+  /api/animals:
+    post:
+      tags: [Animals]
+      summary: Create animal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [species, intakeDate]
+              properties:
+                name: { type: string, nullable: true, maxLength: 50 }
+                species: { type: string, maxLength: 20 }
+                breed: { type: string, nullable: true, maxLength: 50 }
+                sex: { type: string, enum: [M, F, UNKNOWN], default: UNKNOWN }
+                ageYears: { type: integer, nullable: true, minimum: 0, maximum: 30 }
+                intakeDate: { type: string, format: date-time }
+                neutered: { type: boolean, default: false }
+                status:
+                  type: string
+                  enum: [SHELTERED, TEMP_FOSTER, ADOPTED, DECEASED]
+                  default: SHELTERED
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Animal" }
+        "422":
+          description: validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    get:
+      tags: [Animals]
+      summary: List animals (filter/search/sort/page)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: species
+          schema: { type: string }
+        - in: query
+          name: neutered
+          schema: { type: boolean }
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [SHELTERED, TEMP_FOSTER, ADOPTED, DECEASED]
+        - in: query
+          name: keyword
+          schema: { type: string }
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+        - in: query
+          name: page
+          schema: { type: integer, default: 0, minimum: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 20, minimum: 1, maximum: 50 }
+        - in: query
+          name: sort
+          schema: { type: string, default: "createdAt,DESC" }
+      responses:
+        "200":
+          description: paged animals
+          content:
+            application/json:
+              schema:
+                allOf: [{ $ref: "#/components/schemas/PageResponse" }]
+                properties:
+                  content:
+                    type: array
+                    items: { $ref: "#/components/schemas/Animal" }
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "400":
+          description: Invalid query
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/animals/{id}:
+    get:
+      tags: [Animals]
+      summary: Get animal by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: animal
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Animal" }
+        "404":
+          description: not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "400":
+          description: invalid id
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    patch:
+      tags: [Animals]
+      summary: Update animal (partial)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: "validateUpdate(req.body) 기준"
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Animal" }
+        "422":
+          description: validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    delete:
+      tags: [Animals]
+      summary: Delete animal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: deleted
+        "404":
+          description: not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/animals/{id}/status:
+    patch:
+      tags: [Animals]
+      summary: Update animal status (ADMIN planned)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [SHELTERED, TEMP_FOSTER, ADOPTED, DECEASED]
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Animal" }
+        "422":
+          description: validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/animals/{id}/neutered:
+    patch:
+      tags: [Animals]
+      summary: Update animal neutered boolean
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [neutered]
+              properties:
+                neutered: { type: boolean }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Animal" }
+        "422":
+          description: validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  ########################################################
+  # Adoptions (mounted: /api/adoptions)  ※ 내부가 /adoptions...
+  ########################################################
+
+  /api/adoptions/__ping:
+    get:
+      tags: [Adoptions]
+      summary: Ping (adoptions module)
+      responses:
+        "200":
+          description: OK
+
+  /api/adoptions/adoptions:
+    post:
+      tags: [Adoptions]
+      summary: Create adoption request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [animalId, applicantName]
+              properties:
+                animalId: { type: integer }
+                applicantName: { type: string, maxLength: 50 }
+                applicantPhone: { type: string, nullable: true, maxLength: 20 }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Adoption" }
+        "409":
+          description: state conflict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "422":
+          description: validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    get:
+      tags: [Adoptions]
+      summary: List adoptions (filter/search/sort/page)
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [REQUESTED, APPROVED, CONFIRMED, CANCELED]
+        - in: query
+          name: animalId
+          schema: { type: integer }
+        - in: query
+          name: keyword
+          schema: { type: string, description: "applicantName contains" }
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+        - in: query
+          name: page
+          schema: { type: integer, default: 0, minimum: 0 }
+        - in: query
+          name: size
+            # validators 기준 1~50 가정
+          schema: { type: integer, default: 20, minimum: 1, maximum: 50 }
+        - in: query
+          name: sort
+          schema: { type: string, default: "requestedAt,DESC" }
+      responses:
+        "200":
+          description: paged adoptions
+          content:
+            application/json:
+              schema:
+                allOf: [{ $ref: "#/components/schemas/PageResponse" }]
+                properties:
+                  content:
+                    type: array
+                    items: { $ref: "#/components/schemas/Adoption" }
+        "400":
+          description: invalid query
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/adoptions/adoptions/{id}:
+    get:
+      tags: [Adoptions]
+      summary: Get adoption by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: adoption
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Adoption" }
+        "404":
+          description: not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "400":
+          description: invalid id
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/adoptions/adoptions/pending:
+    get:
+      tags: [Adoptions]
+      summary: List pending adoption requests (REQUESTED)
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 0, minimum: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 20, minimum: 1, maximum: 50 }
+      responses:
+        "200":
+          description: paged requested adoptions
+          content:
+            application/json:
+              schema:
+                allOf: [{ $ref: "#/components/schemas/PageResponse" }]
+                properties:
+                  content:
+                    type: array
+                    items: { $ref: "#/components/schemas/Adoption" }
+
+  /api/adoptions/animals/{id}/adoptions:
+    get:
+      tags: [Adoptions]
+      summary: List adoptions by animal id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, description: "animalId" }
+        - in: query
+          name: page
+          schema: { type: integer, default: 0, minimum: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 20, minimum: 1, maximum: 50 }
+      responses:
+        "200":
+          description: paged adoptions for animal
+          content:
+            application/json:
+              schema:
+                allOf: [{ $ref: "#/components/schemas/PageResponse" }]
+                properties:
+                  content:
+                    type: array
+                    items: { $ref: "#/components/schemas/Adoption" }
+        "404":
+          description: animal not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/adoptions/adoptions/{id}/approve:
+    patch:
+      tags: [Adoptions]
+      summary: Approve adoption (ADMIN)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: approved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Adoption" }
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: Forbidden (role)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "409":
+          description: state conflict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/adoptions/adoptions/{id}/confirm:
+    patch:
+      tags: [Adoptions]
+      summary: Confirm adoption (adoptedAt required)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [adoptedAt]
+              properties:
+                adoptedAt: { type: string, format: date-time }
+      responses:
+        "200":
+          description: confirmed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Adoption" }
+        "422":
+          description: validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "409":
+          description: state conflict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/adoptions/adoptions/{id}/cancel:
+    patch:
+      tags: [Adoptions]
+      summary: Cancel adoption (cancelReason required)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cancelReason]
+              properties:
+                cancelReason: { type: string, maxLength: 255 }
+      responses:
+        "200":
+          description: canceled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Adoption" }
+        "422":
+          description: validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "409":
+          description: state conflict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  ########################################################
+  # Donations (mounted: /api/donations)  ※ 내부가 /donations...
+  ########################################################
+
+  /api/donations/__ping:
+    get:
+      tags: [Donations]
+      summary: Ping (donations module)
+      responses:
+        "200":
+          description: OK
+
+  /api/donations/donations:
+    post:
+      tags: [Donations]
+      summary: Create donation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [donorName, amount, donatedAt]
+              properties:
+                donorName: { type: string, maxLength: 50 }
+                donorContact: { type: string, nullable: true, maxLength: 50 }
+                amount: { type: integer, minimum: 1 }
+                donatedAt: { type: string, format: date-time }
+                receiptIssued: { type: boolean, default: false }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Donation" }
+        "422":
+          description: validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    get:
+      tags: [Donations]
+      summary: List donations (filter/search/sort/page)
+      parameters:
+        - in: query
+          name: keyword
+          schema: { type: string, description: "donorName contains" }
+        - in: query
+          name: receiptIssued
+          schema: { type: boolean }
+        - in: query
+          name: minAmount
+          schema: { type: integer, minimum: 0 }
+        - in: query
+          name: maxAmount
+          schema: { type: integer, minimum: 0 }
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+        - in: query
+          name: page
+          schema: { type: integer, default: 0, minimum: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 20, minimum: 1, maximum: 50 }
+        - in: query
+          name: sort
+          schema: { type: string, default: "donatedAt,DESC" }
+      responses:
+        "200":
+          description: paged donations
+          content:
+            application/json:
+              schema:
+                allOf: [{ $ref: "#/components/schemas/PageResponse" }]
+                properties:
+                  content:
+                    type: array
+                    items: { $ref: "#/components/schemas/Donation" }
+        "400":
+          description: invalid query
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/donations/donations/{id}:
+    get:
+      tags: [Donations]
+      summary: Get donation by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: donation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Donation" }
+        "404":
+          description: not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "400":
+          description: invalid id
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    patch:
+      tags: [Donations]
+      summary: Update donation (partial)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                donorName: { type: string, nullable: true, maxLength: 50 }
+                donorContact: { type: string, nullable: true, maxLength: 50 }
+                amount: { type: integer, minimum: 1 }
+                donatedAt: { type: string, format: date-time }
+                receiptIssued: { type: boolean }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Donation" }
+        "422":
+          description: validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    delete:
+      tags: [Donations]
+      summary: Delete donation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: deleted
+        "404":
+          description: not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/donations/donations/{id}/receipt:
+    patch:
+      tags: [Donations]
+      summary: Update receiptIssued only
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receiptIssued]
+              properties:
+                receiptIssued: { type: boolean }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Donation" }
+        "422":
+          description: validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  ########################################################
+  # Medical (mounted: /api/medical)  ※ 내부가 /animals..., /medical-records...
+  ########################################################
+
+  /api/medical/__ping:
+    get:
+      tags: [Medical]
+      summary: Ping (medical module)
+      responses:
+        "200":
+          description: OK
+
+  /api/medical/animals/{id}/medical-records:
+    post:
+      tags: [Medical]
+      summary: Create medical record for animal (sub-resource)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, description: "animalId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, performedAt]
+              properties:
+                type: { type: string, maxLength: 30 }
+                description: { type: string, nullable: true }
+                performedAt: { type: string, format: date-time }
+                cost: { type: number, nullable: true }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalRecord" }
+        "404":
+          description: animal not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "422":
+          description: validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    get:
+      tags: [Medical]
+      summary: List medical records by animal (paged)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, description: "animalId" }
+        - in: query
+          name: page
+          schema: { type: integer, default: 0, minimum: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 20, minimum: 1, maximum: 50 }
+        - in: query
+          name: sort
+          schema: { type: string, default: "performedAt,DESC" }
+      responses:
+        "200":
+          description: paged medical records for animal
+          content:
+            application/json:
+              schema:
+                allOf: [{ $ref: "#/components/schemas/PageResponse" }]
+                properties:
+                  content:
+                    type: array
+                    items: { $ref: "#/components/schemas/MedicalRecord" }
+        "404":
+          description: animal not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/medical/medical-records:
+    get:
+      tags: [Medical]
+      summary: List medical records (filter by type/date, paged)
+      parameters:
+        - in: query
+          name: type
+          schema: { type: string }
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+        - in: query
+          name: page
+          schema: { type: integer, default: 0, minimum: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 20, minimum: 1, maximum: 50 }
+        - in: query
+          name: sort
+          schema: { type: string, default: "performedAt,DESC" }
+      responses:
+        "200":
+          description: paged medical records
+          content:
+            application/json:
+              schema:
+                allOf: [{ $ref: "#/components/schemas/PageResponse" }]
+                properties:
+                  content:
+                    type: array
+                    items: { $ref: "#/components/schemas/MedicalRecord" }
+        "400":
+          description: invalid query
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/medical/medical-records/{recordId}:
+    get:
+      tags: [Medical]
+      summary: Get medical record by id
+      parameters:
+        - in: path
+          name: recordId
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: record
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalRecord" }
+        "404":
+          description: record not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    patch:
+      tags: [Medical]
+      summary: Update medical record (partial)
+      parameters:
+        - in: path
+          name: recordId
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type: { type: string }
+                description: { type: string, nullable: true }
+                performedAt: { type: string, format: date-time }
+                cost: { type: number, nullable: true }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalRecord" }
+        "422":
+          description: validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: record not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    delete:
+      tags: [Medical]
+      summary: Delete medical record (ADMIN planned)
+      parameters:
+        - in: path
+          name: recordId
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: deleted
+        "404":
+          description: record not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/medical/animals/{id}/medical-summary:
+    get:
+      tags: [Medical]
+      summary: Recent medical summary for animal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, description: "animalId" }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 5, minimum: 1, maximum: 20 }
+      responses:
+        "200":
+          description: recent summary rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  animalId: { type: integer }
+                  limit: { type: integer }
+                  recent:
+                    type: array
+                    items: { $ref: "#/components/schemas/MedicalRecord" }
+        "404":
+          description: animal not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  ########################################################
+  # Volunteers (mounted: /api/volunteers)  ※ 내부가 /volunteers..., /stats...
+  ########################################################
+
+  /api/volunteers/__ping:
+    get:
+      tags: [Volunteers]
+      summary: Ping (volunteers module)
+      responses:
+        "200":
+          description: OK
+
+  /api/volunteers/volunteers:
+    post:
+      tags: [Volunteers]
+      summary: Create volunteer application (PENDING)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 50 }
+                phone: { type: string, nullable: true, maxLength: 30 }
+                email: { type: string, nullable: true, maxLength: 100 }
+                note: { type: string, nullable: true }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Volunteer" }
+        "422":
+          description: validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    get:
+      tags: [Volunteers]
+      summary: List volunteers (filter/search/sort/page)
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, SUSPENDED]
+        - in: query
+          name: keyword
+          schema: { type: string, description: "name/phone/email contains" }
+        - in: query
+          name: page
+          schema: { type: integer, default: 0, minimum: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 20, minimum: 1, maximum: 50 }
+        - in: query
+          name: sort
+          schema: { type: string, default: "createdAt,DESC" }
+      responses:
+        "200":
+          description: paged volunteers
+          content:
+            application/json:
+              schema:
+                allOf: [{ $ref: "#/components/schemas/PageResponse" }]
+                properties:
+                  content:
+                    type: array
+                    items: { $ref: "#/components/schemas/Volunteer" }
+        "400":
+          description: invalid query
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/volunteers/volunteers/{id}:
+    get:
+      tags: [Volunteers]
+      summary: Get volunteer by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: volunteer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Volunteer" }
+        "404":
+          description: not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    patch:
+      tags: [Volunteers]
+      summary: Update volunteer (basic fields)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                phone: { type: string, nullable: true }
+                email: { type: string, nullable: true }
+                note: { type: string, nullable: true }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Volunteer" }
+        "422":
+          description: validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    delete:
+      tags: [Volunteers]
+      summary: Delete volunteer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: deleted
+        "404":
+          description: not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/volunteers/volunteers/pending:
+    get:
+      tags: [Volunteers]
+      summary: List PENDING volunteers (ADMIN planned)
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 0, minimum: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 20, minimum: 1, maximum: 50 }
+      responses:
+        "200":
+          description: paged pending volunteers
+          content:
+            application/json:
+              schema:
+                allOf: [{ $ref: "#/components/schemas/PageResponse" }]
+                properties:
+                  content:
+                    type: array
+                    items: { $ref: "#/components/schemas/Volunteer" }
+
+  /api/volunteers/volunteers/{id}/approve:
+    patch:
+      tags: [Volunteers]
+      summary: Approve volunteer (ADMIN planned)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: approved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Volunteer" }
+        "409":
+          description: state conflict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/volunteers/volunteers/{id}/suspend:
+    patch:
+      tags: [Volunteers]
+      summary: Suspend volunteer (ADMIN planned)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: suspended
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Volunteer" }
+        "409":
+          description: state conflict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/volunteers/volunteers/{id}/reinstate:
+    patch:
+      tags: [Volunteers]
+      summary: Reinstate volunteer (ADMIN planned)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: reinstated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Volunteer" }
+        "409":
+          description: state conflict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/volunteers/stats/volunteers/status:
+    get:
+      tags: [Stats]
+      summary: Volunteer count by status (simple stats)
+      responses:
+        "200":
+          description: rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        status: { type: string }
+                        count: { type: integer }
+
+  ########################################################
+  # Stats (mounted: /api/stats)  ※ 내부가 /stats/...
+  ########################################################
+
+  /api/stats/__ping:
+    get:
+      tags: [Stats]
+      summary: Ping (stats module)
+      responses:
+        "200":
+          description: OK
+
+  /api/stats/stats/donations/daily:
+    get:
+      tags: [Stats]
+      summary: Donations daily aggregate
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from: { type: string, format: date-time, nullable: true }
+                  to: { type: string, format: date-time, nullable: true }
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date: { type: string }
+                        totalAmount: { type: number }
+                        count: { type: integer }
+        "400":
+          description: invalid query
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/stats/stats/donations/monthly:
+    get:
+      tags: [Stats]
+      summary: Donations monthly aggregate
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from: { type: string, format: date-time, nullable: true }
+                  to: { type: string, format: date-time, nullable: true }
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        month: { type: string }
+                        totalAmount: { type: number }
+                        count: { type: integer }
+        "400":
+          description: invalid query
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/stats/stats/donations/top-donors:
+    get:
+      tags: [Stats]
+      summary: Top donors aggregate
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          description: rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from: { type: string, format: date-time, nullable: true }
+                  to: { type: string, format: date-time, nullable: true }
+                  limit: { type: integer }
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        donorName: { type: string }
+                        totalAmount: { type: number }
+                        count: { type: integer }
+        "400":
+          description: invalid query
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
